@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "/dev/nnsmith/nnsmith/backends/factory.py", line 204, in verify_results
+    assert_allclose(
+  File "/dev/nnsmith/nnsmith/difftest.py", line 22, in assert_allclose
+    testing.assert_allclose(
+  File "/numpy/testing/_private/utils.py", line 1527, in assert_allclose
+    assert_array_compare(compare, actual, desired, err_msg=str(err_msg),
+  File "/numpy/testing/_private/utils.py", line 844, in assert_array_compare
+    raise AssertionError(msg)
+AssertionError:
+Not equal to tolerance rtol=0.01, atol=0.001
+tvm (llvm -keys=cpu -link-params=0 opt: True) != torch[cpu] eager at o0
+Mismatched elements: 3 / 4 (75%)
+Max absolute difference: 5
+Max relative difference: 5.
+ x: array([[[[6]],
+
+        [[3]],...
+ y: array([[[[1]],
+
+        [[1]],...

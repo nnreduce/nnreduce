@@ -1,0 +1,8 @@
+{
+    "system": "tvm",
+    "symptom": "inconsistency",
+    "stage": "verification",
+    "version": "0.9.0",
+    "version_id": null,
+    "issues": "https://github.com/apache/tvm/issues/12630"
+}

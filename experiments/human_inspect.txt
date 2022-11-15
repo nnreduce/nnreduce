@@ -1,0 +1,132 @@
+ort_114_manual_inspect = [
+    ["O1", "O3", "O4"],  # max
+    ["O2"],  # trans-matmul-sub
+    ["O5"],  # relu-expand-clip
+    [
+        "O6",  #
+        "O7",  #
+        "O16",
+        "O27",
+        "O29",
+        "O11",  #
+        "O13",
+        "O14",  #
+        "O19",
+        "O24",  #
+        "O26",  # Resize - ReLU - Greater
+        "O20",  # Resize - Pad - AvgPool - Greater
+        "O28",
+    ],  # resize-?-greater ! inconsistency
+    # graph subg (
+    #   %/Max_output_0[DOUBLE, 1x1x1x3]
+    #   %/Concat_1_output_0[INT64, 4]
+    # ) {
+    #   %/Resize_output_0 = Resize[...](%/Max_output_0, %, %, %/Concat_1_output_0)
+    #   %o1 = Greater(%/Resize_output_0, %/Max_output_0)
+    #   return %o1
+    # }
+    ["O8", "O10", "O22", "O23", "O25", "O30"],  # cast-cast
+    ["O9"],  # Mul - MatMul :: shape mis-match
+    ["O12"],  # MatMul - LeakyRelu - Mul :: shape mis-match
+    ["O15"],  # Div-C-C-Exp-MatMul :: shape mis-match
+    ["O17"],  # Tan - Conv - MatMul :: shape mis-match
+    ["O18"],  # Resize - Sub - Floor #? Maybe can merge into # inf.
+    ["O21"],  # Div Erf Add Mul Mul Greater
+]
+
+tvm_114_manual_inspect = [
+    ["T1"],  # Conv-Mul-Mul-Squeeze
+    # def @main(%v/Sin_output_0: Tensor[(1, 1, 5, 1), float32] /* ty=Tensor[(1, 1, 5, 1), float32] */, %v/mlist.4/Add_output_0: Tensor[(1, 1, 5, 1), float32] /* ty=Tensor[(1, 1, 5, 1), float32] */) -> Tensor[(1, 5, 1), float32] {
+    #   %0 = nn.conv2d(%v/Sin_output_0, meta[relay.Constant][0] /* ty=Tensor[(1, 1, 1, 1), float32] */, padding=[0, 0, 0, 0], channels=1, kernel_size=[1, 1]) /* ty=Tensor[(1, 1, 5, 1), float32] */;
+    #   %1 = nn.bias_add(%0, meta[relay.Constant][1] /* ty=Tensor[(1), float32] */) /* ty=Tensor[(1, 1, 5, 1), float32] */;
+    #   %2 = multiply(%1, %v/mlist.4/Add_output_0) /* ty=Tensor[(1, 1, 5, 1), float32] */;
+    #   %3 = multiply(%2, 0.5f /* ty=float32 */) /* ty=Tensor[(1, 1, 5, 1), float32] */;
+    #   squeeze(%3, axis=[1]) /* ty=Tensor[(1, 5, 1), float32] */
+    # }
+    [
+        "T2",
+        "T5",
+    ],  # Expand-Transpose-Argmin | `Tensor[(1i64, 1i64, 1i64), int64]` does not match `Tensor[(1i64, 1i64, 1i64), int32]`
+    # ~ T2
+    # def @main(%v/Concat_output_0: Tensor[(5, 1, 1, 1), float32] /* ty=Tensor[(5, 1, 1, 1), float32] */) -> (Tensor[(5i64, 1i64, 1i64, 1i64), float32], Tensor[(1i64, 1i64, 1i64), int64]) {
+    #   %0 = broadcast_to(%v/Concat_output_0, shape=[5i64, 1i64, 1i64, 1i64]) /* ty=Tensor[(5i64, 1i64, 1i64, 1i64), float32] */;
+    #   %1 = argmin(%0, axis=[0]) /* ty=Tensor[(1i64, 1i64, 1i64), int64] */;
+    #   %2 = transpose(%0, axes=[0, 2, 1, 3]) /* ty=Tensor[(5i64, 1i64, 1i64, 1i64), float32] */;
+    #   %3 = cast(%1, dtype="int64") /* ty=Tensor[(1i64, 1i64, 1i64), int64] */;
+    #   (%2, %3) /* ty=(Tensor[(5i64, 1i64, 1i64, 1i64), float32], Tensor[(1i64, 1i64, 1i64), int64]) */
+    # }
+    # ~ T5
+    # Expand-ArgMin-Less | In particular `Tensor[(1i64, 1i64, 1i64), int64]` does not match `Tensor[(1i64, 1i64, 1i64), int32]`
+    # def @main(%v/Concat_output_0: Tensor[(2, 1, 1, 1), int64] /* ty=Tensor[(2, 1, 1, 1), int64] */) -> Tensor[(2i64, 1i64, 1i64, 1i64), bool] {
+    #   %0 = broadcast_to(%v/Concat_output_0, shape=[2i64, 1i64, 1i64, 1i64]) /* ty=Tensor[(2i64, 1i64, 1i64, 1i64), int64] */;
+    #   %1 = argmin(%0, axis=[0]) /* ty=Tensor[(1i64, 1i64, 1i64), int64] */;
+    #   %2 = cast(%1, dtype="int64") /* ty=Tensor[(1i64, 1i64, 1i64), int64] */;
+    #   less(%2, %0) /* ty=Tensor[(2i64, 1i64, 1i64, 1i64), bool] */
+    # }
+    ["T3"],  # div by 0
+    [
+        "T4",
+        "T9",
+        "T10",
+        "T13",
+    ],  # data types float32 and float64 do not match in BroadcastRel | max op's fault.
+    ["T6", "T8"],  # Trilu schedule. Fixed in latest TVM.
+    ["T7", "T11", "T14"],  # Trilu GE/LE. Fixed in latest TVM.
+    [  # broadcast_to -*- argmin/max -*- cast
+        "T15",  # check fail at runtime. arg.T_where_red.dtype is expected to be int64
+        # def @main(%i3: Tensor[(2, 1, 2, 2), bool] /* ty=Tensor[(2, 1, 2, 2), bool] */, %i2: Tensor[(2, 1, 2, 2), bool] /* ty=Tensor[(2, 1, 2, 2), bool] */, %i0: Tensor[(1, 2, 2, 1, 1), float64] /* ty=Tensor[(1, 2, 2, 1, 1), float64] */, %v/Transpose_output_0: Tensor[(2, 2, 1, 1, 1), float64] /* ty=Tensor[(2, 2, 1, 1, 1), float64] */) -> Tensor[(2, 2i64, 2i64, 2i64), int64] {
+        #   %0 = broadcast_to(%i3, shape=[2i64, 1i64, 2i64, 2i64]) /* ty=Tensor[(2i64, 1i64, 2i64, 2i64), bool] */;
+        #   %1 = (%0, %i2) /* ty=(Tensor[(2i64, 1i64, 2i64, 2i64), bool], Tensor[(2, 1, 2, 2), bool]) */;
+        #   %2 = concatenate(%1, axis=1) /* ty=Tensor[(2i64, 2i64, 2i64, 2i64), bool] */;
+        #   %3 = where(%2, %i0, %v/Transpose_output_0) /* ty=Tensor[(2, 2i64, 2i64, 2i64, 2i64), float64] */;
+        #   %4 = argmax(%3, axis=[1]) /* ty=Tensor[(2, 2i64, 2i64, 2i64), int32] */;
+        #   cast(%4, dtype="int64") /* ty=Tensor[(2, 2i64, 2i64, 2i64), int64] */
+        # }
+        "T16",  # arg.T_minimum_red.dtype is expected to be int64
+        # def @main(%i0: Tensor[(1), int32] /* ty=Tensor[(1), int32] */, %v/Max_output_0: Tensor[(1, 1, 1, 1), int32] /* ty=Tensor[(1, 1, 1, 1), int32] */) -> Tensor[(1, 1, 1), int64] {
+        #   %0 = broadcast_to(%i0, shape=[1i64]) /* ty=Tensor[(1i64), int32] */;
+        #   %1 = minimum(%0, %v/Max_output_0) /* ty=Tensor[(1, 1, 1, 1), int32] */;
+        #   %2 = argmin(%1, axis=[3]) /* ty=Tensor[(1, 1, 1), int32] */;
+        #   cast(%2, dtype="int64") /* ty=Tensor[(1, 1, 1), int64] */
+        # }
+        "T17",  # arg.T_multiply_red.dtype is expected to be int64
+        # def @main(%i1: Tensor[(1, 1, 2, 1), float64] /* ty=Tensor[(1, 1, 2, 1), float64] */, %i0: Tensor[(2, 2, 1, 2), float64] /* ty=Tensor[(2, 2, 1, 2), float64] */) -> Tensor[(2, 2i64, 2), int64] {
+        #   %0 = broadcast_to(%i1, shape=[1i64, 1i64, 2i64, 1i64]) /* ty=Tensor[(1i64, 1i64, 2i64, 1i64), float64] */;
+        #   %1 = multiply(%0, %i0) /* ty=Tensor[(2, 2, 2i64, 2), float64] */;
+        #   %2 = argmax(%1, axis=[1]) /* ty=Tensor[(2, 2i64, 2), int32] */;
+        #   cast(%2, dtype="int64") /* ty=Tensor[(2, 2i64, 2), int64] */
+        # }
+        "T18",  # arg.T_broadcast_to_red.dtype is expected to be int32
+        # def @main(%v/Sub_output_0: Tensor[(2, 2, 2, 1), int32] /* ty=Tensor[(2, 2, 2, 1), int32] */) -> Tensor[(2i64, 1i64, 2i64), int64] {
+        #   %0 = transpose(%v/Sub_output_0, axes=[0, 1, 3, 2]) /* ty=Tensor[(2, 2, 1, 2), int32] */;
+        #   %1 = broadcast_to(%0, shape=[2i64, 2i64, 1i64, 2i64]) /* ty=Tensor[(2i64, 2i64, 1i64, 2i64), int32] */;
+        #   %2 = argmax(%1, axis=[0]) /* ty=Tensor[(2i64, 1i64, 2i64), int64] */;
+        #   cast(%2, dtype="int64") /* ty=Tensor[(2i64, 1i64, 2i64), int64] */
+        # }
+        "T19",  # arg.T_broadcast_to_red.dtype is expected to be int32
+        # def @main(%i0: Tensor[(1, 1, 1, 1), int32] /* ty=Tensor[(1, 1, 1, 1), int32] */) -> Tensor[(1i64, 1i64, 1i64), int64] {
+        #   %0 = (%i0, meta[relay.Constant][0] /* ty=Tensor[(1, 1, 1, 1), int32] */) /* ty=(Tensor[(1, 1, 1, 1), int32], Tensor[(1, 1, 1, 1), int32]) */;
+        #   %1 = concatenate(%0, axis=3) /* ty=Tensor[(1, 1, 1, 2), int32] */;
+        #   %2 = broadcast_to(%1, shape=[1i64, 1i64, 1i64, 2i64]) /* ty=Tensor[(1i64, 1i64, 1i64, 2i64), int32] */;
+        #   %3 = argmin(%2, axis=[3]) /* ty=Tensor[(1i64, 1i64, 1i64), int64] */;
+        #   cast(%3, dtype="int64") /* ty=Tensor[(1i64, 1i64, 1i64), int64] */
+        # }
+        "T21",  # arg.T_subtract_red.dtype is expected to be int64
+        # def @main(%v/Expand_output_0: Tensor[(1, 1, 1, 1), int64] /* ty=Tensor[(1, 1, 1, 1), int64] */, %i0: Tensor[(1, 1, 1, 1), int64] /* ty=Tensor[(1, 1, 1, 1), int64] */) -> Tensor[(1, 1, 1), int64] {
+        #   %0 = broadcast_to(%v/Expand_output_0, shape=[1i64, 1i64, 1i64, 1i64]) /* ty=Tensor[(1i64, 1i64, 1i64, 1i64), int64] */;
+        #   %1 = subtract(%0, %i0) /* ty=Tensor[(1, 1, 1, 1), int64] */;
+        #   %2 = argmin(%1, axis=[2]) /* ty=Tensor[(1, 1, 1), int32] */;
+        #   cast(%2, dtype="int64") /* ty=Tensor[(1, 1, 1), int64] */
+        # }
+    ],
+    ["T20"],  # arg.p0_red.dtype is expected to be int64
+    # def @main(%v/Concat_output_0: Tensor[(2, 1, 1, 1, 1), int64] /* ty=Tensor[(2, 1, 1, 1, 1), int64] */) -> (Tensor[(2i64, 1i64, 1i64, 1i64, 1i64), int64], Tensor[(2i64, 1i64, 1i64, 1i64), int64]) {
+    #   %0 = broadcast_to(%v/Concat_output_0, shape=[2i64, 1i64, 1i64, 1i64, 1i64]) /* ty=Tensor[(2i64, 1i64, 1i64, 1i64, 1i64), int64] */;
+    #   %1 = argmin(%0, axis=[1]) /* ty=Tensor[(2i64, 1i64, 1i64, 1i64), int64] */;
+    #   %2 = broadcast_to(%v/Concat_output_0, shape=[2i64, 1i64, 1i64, 1i64, 1i64]) /* ty=Tensor[(2, 1i64, 1i64, 1i64, 1i64), int64] */;
+    #   %3 = cast(%1, dtype="int64") /* ty=Tensor[(2i64, 1i64, 1i64, 1i64), int64] */;
+    #   (%2, %3) /* ty=(Tensor[(2i64, 1i64, 1i64, 1i64, 1i64), int64], Tensor[(2i64, 1i64, 1i64, 1i64), int64]) */
+    # }
+    ["T22", "T24", "T25", "T26", "T27"],  # erf-add-mul-mul-?-[greater/equal]
+    ["T23"],  # resize-greater in TVM
+]
